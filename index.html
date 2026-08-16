@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HRpro</title>
+
+<!-- PDF.js for PDF text extraction -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<!-- Mammoth.js for DOCX text extraction -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<!-- Google Identity Services for Sheets OAuth -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+
+<style>
+  :root{
+    --ink:#1c2b28;
+    --paper:#f6f4ee;
+    --line:#d9d3c4;
+    --accent:#2f5d50;
+    --accent-soft:#e4ece8;
+    --amber:#b6752b;
+    --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+    --sans: "IBM Plex Sans", "Segoe UI", sans-serif;
+  }
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--sans);
+    line-height:1.4;
+  }
+  .wrap{
+    max-width:920px;
+    margin:0 auto;
+    padding:40px 24px 80px;
+  }
+  header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    border-bottom:2px solid var(--ink);
+    padding-bottom:14px;
+    margin-bottom:28px;
+  }
+  header .tag{
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--accent);
+  }
+  h1{
+    font-size:28px;
+    margin:2px 0 0;
+    font-weight:700;
+  }
+  .step-label{
+    font-family:var(--mono);
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:.1em;
+    color:#6b6558;
+    margin:0 0 8px;
+  }
+
+  /* Dropzone */
+  #dropzone{
+    border:2px dashed var(--line);
+    background:#fff;
+    border-radius:4px;
+    padding:36px 20px;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color .15s, background .15s;
+  }
+  #dropzone.drag{
+    border-color:var(--accent);
+    background:var(--accent-soft);
+  }
+  #dropzone p{margin:4px 0;}
+  #dropzone .big{font-size:16px;font-weight:600;}
+  #dropzone .small{font-size:13px;color:#6b6558;}
+  #fileInput{display:none;}
+  #fileStatus{
+    margin-top:10px;
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--accent);
+    min-height:16px;
+  }
+
+  /* Form */
+  #formSection{display:none; margin-top:36px;}
+  .grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:16px 20px;
+  }
+  .field{display:flex; flex-direction:column; gap:6px;}
+  .field.full{grid-column:1 / -1;}
+  label{
+    font-family:var(--mono);
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:.06em;
+    color:#54503f;
+    display:flex;
+    justify-content:space-between;
+  }
+  label .src{
+    font-size:10px;
+    padding:1px 6px;
+    border-radius:20px;
+    background:var(--accent-soft);
+    color:var(--accent);
+    text-transform:none;
+    letter-spacing:0;
+  }
+  label .src.manual{background:#f2e6d3; color:var(--amber);}
+  input, select, textarea{
+    font-family:var(--sans);
+    font-size:14px;
+    padding:9px 10px;
+    border:1.5px solid var(--line);
+    border-radius:3px;
+    background:#fff;
+    color:var(--ink);
+  }
+  input:focus, select:focus, textarea:focus{
+    outline:none;
+    border-color:var(--accent);
+  }
+  input.autofilled{background:var(--accent-soft);}
+
+  .actions{
+    margin-top:32px;
+    display:flex;
+    gap:14px;
+    flex-wrap:wrap;
+    border-top:1px solid var(--line);
+    padding-top:24px;
+  }
+  button.action{
+    font-family:var(--sans);
+    font-weight:600;
+    font-size:14px;
+    padding:12px 18px;
+    border-radius:3px;
+    border:1.5px solid var(--ink);
+    background:var(--ink);
+    color:var(--paper);
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  button.action.secondary{
+    background:#fff;
+    color:var(--ink);
+  }
+  button.action:hover{opacity:.88;}
+  button.action:disabled{opacity:.5; cursor:not-allowed;}
+
+  .status-line{
+    font-family:var(--mono);
+    font-size:12px;
+    margin-top:10px;
+    min-height:16px;
+  }
+  .status-line.ok{color:var(--accent);}
+  .status-line.err{color:#a5382e;}
+
+  details.config{
+    margin-top:44px;
+    border-top:1px dashed var(--line);
+    padding-top:16px;
+    font-size:13px;
+  }
+  details.config summary{
+    cursor:pointer;
+    font-family:var(--mono);
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    color:#6b6558;
+  }
+  .config-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+    margin-top:14px;
+  }
+  .config-grid .field{grid-column: span 1;}
+  .config-grid label{font-size:10px;}
+  .hint{color:#847e6d; font-size:12px; margin-top:4px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <div class="tag">HRpro</div>
+      <h1>Resume → CRM & Sheet</h1>
+    </div>
+  </header>
+
+  <div class="step-label">Step 1 — Upload resume</div>
+  <div id="dropzone">
+    <p class="big">Drop a resume here, or click to browse</p>
+    <p class="small">PDF or DOCX. Nothing leaves your browser until you choose to send it.</p>
+    <div id="fileStatus"></div>
+  </div>
+  <input type="file" id="fileInput" accept=".pdf,.docx" />
+
+  <div id="formSection">
+    <div class="step-label" style="margin-top:36px;">Step 2 — Review & complete</div>
+    <p class="hint" style="margin-bottom:18px;">Fields marked <span class="src">auto</span> were pulled from the resume — check them. Fields marked <span class="src manual">manual</span> couldn't be found and need your input.</p>
+
+    <form id="candidateForm">
+      <div class="grid">
+        <div class="field"><label>Date <span class="src manual">manual</span></label><input name="Date" type="date" /></div>
+        <div class="field"><label>Source <span class="src manual">manual</span></label>
+          <select name="Source">
+            <option value="">Select…</option>
+            <option>LinkedIn</option>
+            <option>Naukri</option>
+            <option>Referral</option>
+            <option>Job Portal</option>
+            <option>Direct Application</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="field"><label>Work Mode <span class="src manual">manual</span></label>
+          <select name="Work Mode">
+            <option value="">Select…</option>
+            <option>Remote</option>
+            <option>Onsite</option>
+            <option>Hybrid</option>
+          </select>
+        </div>
+        <div class="field"><label>Name <span class="src auto" data-field="Name">auto</span></label><input name="Name" /></div>
+        <div class="field"><label>Phone <span class="src auto" data-field="Phone">auto</span></label><input name="Phone" /></div>
+        <div class="field"><label>Email <span class="src auto" data-field="Email">auto</span></label><input name="Email" type="email" /></div>
+        <div class="field"><label>Department <span class="src manual">manual</span></label><input name="Department" /></div>
+        <div class="field"><label>Sub Dept <span class="src manual">manual</span></label><input name="Sub Dept" /></div>
+        <div class="field"><label>Role <span class="src auto" data-field="Role">auto</span></label><input name="Role" /></div>
+        <div class="field"><label>Company <span class="src auto" data-field="Company">auto</span></label><input name="Company" /></div>
+        <div class="field"><label>Total Exp <span class="src auto" data-field="Total Exp">auto</span></label><input name="Total Exp" placeholder="e.g. 2.5 years" /></div>
+        <div class="field"><label>Current CTC <span class="src manual">manual</span></label><input name="Current CTC" /></div>
+        <div class="field"><label>Expected CTC <span class="src manual">manual</span></label><input name="Expected CTC" /></div>
+        <div class="field"><label>Notice period <span class="src manual">manual</span></label><input name="Notice period" /></div>
+        <div class="field"><label>Location <span class="src auto" data-field="Location">auto</span></label>
+          <select name="Location">
+            <option value="">Select…</option>
+            <option>Andhra Pradesh</option>
+            <option>Arunachal Pradesh</option>
+            <option>Assam</option>
+            <option>Bihar</option>
+            <option>Chhattisgarh</option>
+            <option>Goa</option>
+            <option>Gujarat</option>
+            <option>Haryana</option>
+            <option>Himachal Pradesh</option>
+            <option>Jharkhand</option>
+            <option>Karnataka</option>
+            <option>Kerala</option>
+            <option>Madhya Pradesh</option>
+            <option>Maharashtra</option>
+            <option>Manipur</option>
+            <option>Meghalaya</option>
+            <option>Mizoram</option>
+            <option>Nagaland</option>
+            <option>Odisha</option>
+            <option>Punjab</option>
+            <option>Rajasthan</option>
+            <option>Sikkim</option>
+            <option>Tamil Nadu</option>
+            <option>Telangana</option>
+            <option>Tripura</option>
+            <option>Uttar Pradesh</option>
+            <option>Uttarakhand</option>
+            <option>West Bengal</option>
+            <option>Andaman and Nicobar Islands</option>
+            <option>Chandigarh</option>
+            <option>Dadra and Nagar Haveli and Daman and Diu</option>
+            <option>Delhi</option>
+            <option>Jammu and Kashmir</option>
+            <option>Ladakh</option>
+            <option>Lakshadweep</option>
+            <option>Puducherry</option>
+          </select>
+        </div>
+        <div class="field full"><label>Reason <span class="src manual">manual</span></label><textarea name="Reason" rows="2"></textarea></div>
+      </div>
+
+      <div class="actions">
+        <button type="button" class="action" id="sendCrmBtn">Send to CRM</button>
+        <button type="button" class="action secondary" id="addSheetBtn">Add to Google Sheet</button>
+      </div>
+      <div class="status-line" id="crmStatus"></div>
+      <div class="status-line" id="sheetStatus"></div>
+    </form>
+  </div>
+
+  <details class="config">
+    <summary>Configuration (set once)</summary>
+    <div class="config-grid">
+      <div class="field">
+        <label>Google OAuth Client ID</label>
+        <input id="cfgClientId" placeholder="xxxxxxxx.apps.googleusercontent.com" />
+      </div>
+      <div class="field">
+        <label>Spreadsheet ID</label>
+        <input id="cfgSheetId" value="1SBRFyyoTG6c06Xo3EBHAW6eQ1gfbg3t4pig5v9qknZA" />
+      </div>
+      <div class="field">
+        <label>Sheet tab name</label>
+        <input id="cfgSheetTab" value="Sheet1" />
+      </div>
+      <div class="field">
+        <label>Extension ID (for CRM autofill)</label>
+        <input id="cfgExtId" placeholder="chrome-extension id, optional" />
+      </div>
+    </div>
+    <p class="hint">
+      Client ID: create an OAuth 2.0 Web Client in Google Cloud Console and add this page's URL under
+      "Authorized JavaScript origins". Extension ID: only needed if you want "Send to CRM" to message your
+      existing browser extension directly — otherwise it falls back to copying the data and opening the CRM tab.
+      These values are saved in your browser's local storage only.
+    </p>
+  </details>
+
+</div>
+
+<script>
+/* ============ CONFIG ============ */
+const CRM_URL = "https://kiranaluvar.github.io/hr/#/candidates";
+const SHEET_COLUMNS = ["Date","Source","Work Mode","Name","Phone","Email","Department",
+  "Sub Dept","Role","Company","Total Exp","Current CTC","Expected CTC","Notice period","Reason","Location"];
+
+const cfg = {
+  get clientId(){ return localStorage.getItem('cfg_clientId') || ''; },
+  get sheetId(){ return localStorage.getItem('cfg_sheetId') || document.getElementById('cfgSheetId').value; },
+  get sheetTab(){ return localStorage.getItem('cfg_sheetTab') || document.getElementById('cfgSheetTab').value; },
+  get extId(){ return localStorage.getItem('cfg_extId') || ''; }
+};
+['cfgClientId','cfgSheetId','cfgSheetTab','cfgExtId'].forEach(id=>{
+  const el = document.getElementById(id);
+  const key = 'cfg_' + id.replace('cfg','').replace(/^./, c=>c.toLowerCase());
+  const saved = localStorage.getItem(key);
+  if(saved) el.value = saved;
+  el.addEventListener('change', ()=> localStorage.setItem(key, el.value));
+});
+
+/* ============ FILE HANDLING ============ */
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const fileStatus = document.getElementById('fileStatus');
+const formSection = document.getElementById('formSection');
+
+dropzone.addEventListener('click', ()=> fileInput.click());
+['dragenter','dragover'].forEach(evt=>
+  dropzone.addEventListener(evt, e=>{ e.preventDefault(); dropzone.classList.add('drag'); }));
+['dragleave','drop'].forEach(evt=>
+  dropzone.addEventListener(evt, e=>{ e.preventDefault(); dropzone.classList.remove('drag'); }));
+dropzone.addEventListener('drop', e=>{
+  if(e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', e=>{
+  if(e.target.files.length) handleFile(e.target.files[0]);
+});
+
+async function handleFile(file){
+  fileStatus.textContent = "Reading " + file.name + "…";
+  try{
+    let text = "";
+    if(file.name.toLowerCase().endsWith('.pdf')){
+      text = await extractPdfText(file);
+    } else if(file.name.toLowerCase().endsWith('.docx')){
+      text = await extractDocxText(file);
+    } else {
+      fileStatus.textContent = "Unsupported file type — use PDF or DOCX.";
+      return;
+    }
+    const parsed = parseResumeText(text);
+    populateForm(parsed);
+    fileStatus.textContent = "Parsed " + file.name + " — review fields below.";
+    formSection.style.display = 'block';
+    formSection.scrollIntoView({behavior:'smooth'});
+  } catch(err){
+    console.error(err);
+    fileStatus.textContent = "Couldn't read that file: " + err.message;
+  }
+}
+
+async function extractPdfText(file){
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({data: buf}).promise;
+  let text = "";
+  for(let i=1;i<=pdf.numPages;i++){
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    text += content.items.map(it=>it.str).join(" ") + "\n";
+  }
+  return text;
+}
+
+async function extractDocxText(file){
+  const buf = await file.arrayBuffer();
+  const result = await mammoth.extractRawText({arrayBuffer: buf});
+  return result.value;
+}
+
+/* ============ PARSING (best-effort heuristics) ============ */
+function parseResumeText(raw){
+  const text = raw.replace(/\r/g,'');
+  const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
+  const out = {};
+
+  const emailMatch = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+  if(emailMatch) out.Email = emailMatch[0];
+
+  const phoneMatch = text.match(/(?:\+?\d{1,3}[\s-]?)?\d{10}\b/);
+  if(phoneMatch) out.Phone = phoneMatch[0].trim();
+
+  // Name: first line that isn't an email/phone/url and isn't all-caps section header like "RESUME"
+  for(const line of lines.slice(0,5)){
+    if(line.length < 4 || line.length > 45) continue;
+    if(/@|\d{5,}|http/i.test(line)) continue;
+    if(/resume|curriculum|cv\b/i.test(line)) continue;
+    out.Name = line;
+    break;
+  }
+
+  // Location: try to match an Indian state name directly, or infer it from a major city
+  const INDIAN_STATES = ["Andhra Pradesh","Arunachal Pradesh","Assam","Bihar","Chhattisgarh","Goa",
+    "Gujarat","Haryana","Himachal Pradesh","Jharkhand","Karnataka","Kerala","Madhya Pradesh",
+    "Maharashtra","Manipur","Meghalaya","Mizoram","Nagaland","Odisha","Punjab","Rajasthan","Sikkim",
+    "Tamil Nadu","Telangana","Tripura","Uttar Pradesh","Uttarakhand","West Bengal",
+    "Andaman and Nicobar Islands","Chandigarh","Dadra and Nagar Haveli and Daman and Diu","Delhi",
+    "Jammu and Kashmir","Ladakh","Lakshadweep","Puducherry"];
+  const CITY_TO_STATE = {
+    "Bengaluru":"Karnataka","Bangalore":"Karnataka","Mumbai":"Maharashtra","Pune":"Maharashtra",
+    "Hyderabad":"Telangana","Chennai":"Tamil Nadu","Kolkata":"West Bengal","Ahmedabad":"Gujarat",
+    "Surat":"Gujarat","Jaipur":"Rajasthan","Lucknow":"Uttar Pradesh","Noida":"Uttar Pradesh",
+    "Kanpur":"Uttar Pradesh","Nagpur":"Maharashtra","Indore":"Madhya Pradesh","Bhopal":"Madhya Pradesh",
+    "Patna":"Bihar","Vadodara":"Gujarat","Coimbatore":"Tamil Nadu","Kochi":"Kerala",
+    "Thiruvananthapuram":"Kerala","Chandigarh":"Chandigarh","Bhubaneswar":"Odisha",
+    "Visakhapatnam":"Andhra Pradesh","Guwahati":"Assam","Gurgaon":"Haryana","Gurugram":"Haryana",
+    "Faridabad":"Haryana","Ludhiana":"Punjab","Amritsar":"Punjab","Dehradun":"Uttarakhand",
+    "Ranchi":"Jharkhand","Raipur":"Chhattisgarh","Shimla":"Himachal Pradesh","Panaji":"Goa",
+    "Delhi":"Delhi","New Delhi":"Delhi"
+  };
+  let foundState = INDIAN_STATES.find(state => new RegExp(`\\b${state}\\b`, 'i').test(text));
+  if(!foundState){
+    const cityHit = Object.keys(CITY_TO_STATE).find(city => new RegExp(`\\b${city}\\b`, 'i').test(text));
+    if(cityHit) foundState = CITY_TO_STATE[cityHit];
+  }
+  if(foundState) out.Location = foundState;
+
+  // Total experience: "X years" or "X.Y years"
+  const expMatch = text.match(/(\d+(\.\d+)?)\s*\+?\s*years?/i);
+  if(expMatch) out['Total Exp'] = expMatch[1] + " years";
+
+  // Company & Role: look for an "Experience" section, take the first non-empty line(s) after it
+  const expIdx = lines.findIndex(l=>/^(work experience|experience|employment history|professional experience)$/i.test(l));
+  if(expIdx !== -1){
+    const candidateLine = lines.slice(expIdx+1, expIdx+4).find(l=>l.length>2 && l.length<80);
+    if(candidateLine){
+      // common formats: "Role at Company", "Role, Company", "Company — Role"
+      let m = candidateLine.match(/(.+?)\s+at\s+(.+)/i);
+      if(m){ out.Role = m[1].trim(); out.Company = m[2].trim(); }
+      else {
+        m = candidateLine.match(/(.+?)[,\|–—-]\s*(.+)/);
+        if(m){ out.Role = m[1].trim(); out.Company = m[2].trim(); }
+      }
+    }
+  }
+
+  return out;
+}
+
+function populateForm(parsed){
+  const form = document.getElementById('candidateForm');
+  // default date to today
+  form.querySelector('[name="Date"]').value = new Date().toISOString().slice(0,10);
+  Object.entries(parsed).forEach(([field, value])=>{
+    const input = form.querySelector(`[name="${field}"]`);
+    if(!input) return;
+    if(input.tagName === 'SELECT'){
+      const match = Array.from(input.options).find(o => o.value === value);
+      if(match){ input.value = value; input.classList.add('autofilled'); }
+    } else {
+      input.value = value;
+      input.classList.add('autofilled');
+    }
+  });
+}
+
+/* ============ SEND TO CRM ============ */
+document.getElementById('sendCrmBtn').addEventListener('click', ()=>{
+  const data = collectFormData();
+  const status = document.getElementById('crmStatus');
+
+  if(cfg.extId && chromeRuntimeAvailable()){
+    try{
+      chrome.runtime.sendMessage(cfg.extId, {type:'AUTOFILL_CRM', data}, (resp)=>{
+        if(chrome.runtime.lastError || !resp || !resp.ok){
+          fallbackCrmSend(data, status);
+        } else {
+          status.textContent = "Sent to extension — opening CRM…";
+          status.className = 'status-line ok';
+          window.open(CRM_URL, '_blank');
+        }
+      });
+      return;
+    } catch(e){ /* fall through to fallback */ }
+  }
+  fallbackCrmSend(data, status);
+});
+
+function chromeRuntimeAvailable(){
+  return typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage;
+}
+
+function fallbackCrmSend(data, status){
+  const json = JSON.stringify(data, null, 2);
+  navigator.clipboard.writeText(json).then(()=>{
+    status.textContent = "No extension configured — candidate data copied to clipboard. Opening CRM, paste the fields in manually (or wire up your extension ID in Configuration above).";
+    status.className = 'status-line';
+  }).catch(()=>{
+    status.textContent = "Opening CRM. Copy fields manually — clipboard access was blocked.";
+    status.className = 'status-line err';
+  });
+  window.open(CRM_URL, '_blank');
+}
+
+/* ============ ADD TO GOOGLE SHEET ============ */
+let tokenClient, accessToken = null;
+
+function ensureTokenClient(){
+  if(!cfg.clientId){
+    throw new Error("Set a Google OAuth Client ID in Configuration first.");
+  }
+  if(!tokenClient){
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: cfg.clientId,
+      scope: 'https://www.googleapis.com/auth/spreadsheets',
+      callback: '' // set per-request below
+    });
+  }
+  return tokenClient;
+}
+
+function getAccessToken(){
+  return new Promise((resolve, reject)=>{
+    try{
+      const client = ensureTokenClient();
+      client.callback = (resp)=>{
+        if(resp.error) reject(resp);
+        else { accessToken = resp.access_token; resolve(accessToken); }
+      };
+      client.requestAccessToken({prompt: accessToken ? '' : 'consent'});
+    } catch(e){ reject(e); }
+  });
+}
+
+document.getElementById('addSheetBtn').addEventListener('click', async ()=>{
+  const status = document.getElementById('sheetStatus');
+  status.className = 'status-line';
+  status.textContent = "Authorizing…";
+  try{
+    await getAccessToken();
+    const data = collectFormData();
+    const row = SHEET_COLUMNS.map(col => data[col] || "");
+    const range = `${cfg.sheetTab}!A:P`;
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${cfg.sheetId}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED`;
+
+    status.textContent = "Appending row…";
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ values: [row] })
+    });
+    if(!res.ok){
+      const err = await res.json().catch(()=>({}));
+      throw new Error(err.error?.message || res.statusText);
+    }
+    status.textContent = "Added to Google Sheet ✓";
+    status.className = 'status-line ok';
+  } catch(err){
+    console.error(err);
+    status.textContent = "Failed: " + (err.message || err.error || "unknown error");
+    status.className = 'status-line err';
+  }
+});
+
+function collectFormData(){
+  const form = document.getElementById('candidateForm');
+  const data = {};
+  SHEET_COLUMNS.forEach(col=>{
+    const el = form.querySelector(`[name="${col}"]`);
+    data[col] = el ? el.value : "";
+  });
+  return data;
+}
+</script>
+</body>
+</html>
